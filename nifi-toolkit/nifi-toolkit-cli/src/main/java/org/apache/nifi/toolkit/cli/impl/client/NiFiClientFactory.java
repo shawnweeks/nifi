@@ -33,6 +33,7 @@ import org.apache.nifi.toolkit.cli.impl.client.nifi.TenantsClient;
 import org.apache.nifi.toolkit.cli.impl.client.nifi.VersionsClient;
 import org.apache.nifi.toolkit.cli.impl.client.nifi.impl.JerseyNiFiClient;
 import org.apache.nifi.toolkit.cli.impl.command.CommandOption;
+import org.apache.nifi.toolkit.cli.impl.util.KerberosUtils;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -61,12 +62,14 @@ public class NiFiClientFactory implements ClientFactory<NiFiClient> {
         final String proxiedEntity = properties.getProperty(CommandOption.PROXIED_ENTITY.getLongName());
         final String protocol = properties.getProperty(CommandOption.PROTOCOL.getLongName());
 
+        final String useKerberos = properties.getProperty(CommandOption.USE_KERBEROS.getLongName());
+
         final boolean secureUrl = url.startsWith("https");
 
         if (secureUrl && (StringUtils.isBlank(truststore)
                 || StringUtils.isBlank(truststoreType)
                 || StringUtils.isBlank(truststorePasswd))
-                ) {
+        ) {
             throw new MissingOptionException(CommandOption.TRUSTSTORE.getLongName() + ", " + CommandOption.TRUSTSTORE_TYPE.getLongName()
                     + ", and " + CommandOption.TRUSTSTORE_PASSWORD.getLongName() + " are required when using an https url");
         }
@@ -103,9 +106,14 @@ public class NiFiClientFactory implements ClientFactory<NiFiClient> {
 
         final NiFiClient client = new JerseyNiFiClient.Builder().config(clientConfigBuilder.build()).build();
 
-        // if a proxied entity was specified then return a wrapped client, otherwise return the regular client
+        /**
+         * if a proxied entity was specified then return a wrapped client, else if secuirty is enabled and use kerberos is set to true
+         * then call the token variant client, otherwise return the regular client
+         */
         if (!StringUtils.isBlank(proxiedEntity)) {
             return new NiFiClientFactory.ProxiedNiFiClient(client, proxiedEntity);
+        } else if (secureUrl && StringUtils.equals(useKerberos, "true")) {
+            return new NiFiClientFactory.TokenNiFiClient(client, KerberosUtils.getKerberosToken(url + "/access/kerberos"));
         } else {
             return client;
         }
@@ -248,6 +256,161 @@ public class NiFiClientFactory implements ClientFactory<NiFiClient> {
         @Override
         public ReportingTasksClient getReportingTasksClient() {
             return wrappedClient.getReportingTasksClientForProxiedEntities(proxiedEntity);
+        }
+
+        @Override
+        public ReportingTasksClient getReportingTasksClientForProxiedEntities(String... proxiedEntity) {
+            return wrappedClient.getReportingTasksClientForProxiedEntities(proxiedEntity);
+        }
+
+        @Override
+        public ReportingTasksClient getReportingTasksClientForToken(String token) {
+            return wrappedClient.getReportingTasksClientForToken(token);
+        }
+
+        @Override
+        public void close() throws IOException {
+            wrappedClient.close();
+        }
+    }
+
+    /**
+     * Wraps a NiFiClient and ensures that all methods to obtain a more specific client will
+     * call the token variation so that callers don't have to care if Kerberos auth is taking place.
+     */
+    private static class TokenNiFiClient implements NiFiClient {
+
+        private final String token;
+        private final NiFiClient wrappedClient;
+
+        public TokenNiFiClient(final NiFiClient wrappedClient, final String token) {
+            this.token = token;
+            this.wrappedClient = wrappedClient;
+        }
+
+        @Override
+        public ControllerClient getControllerClient() {
+            return wrappedClient.getControllerClientForToken(token);
+        }
+
+        @Override
+        public ControllerClient getControllerClientForProxiedEntities(String... proxiedEntity) {
+            return wrappedClient.getControllerClientForProxiedEntities(proxiedEntity);
+        }
+
+        @Override
+        public ControllerClient getControllerClientForToken(String token) {
+            return wrappedClient.getControllerClientForToken(token);
+        }
+
+        @Override
+        public ControllerServicesClient getControllerServicesClient() {
+            return wrappedClient.getControllerServicesClientForToken(token);
+        }
+
+        @Override
+        public ControllerServicesClient getControllerServicesClientForProxiedEntities(String... proxiedEntity) {
+            return wrappedClient.getControllerServicesClientForProxiedEntities(proxiedEntity);
+        }
+
+        @Override
+        public ControllerServicesClient getControllerServicesClientForToken(String token) {
+            return wrappedClient.getControllerServicesClientForToken(token);
+        }
+
+        @Override
+        public FlowClient getFlowClient() {
+            return wrappedClient.getFlowClientForToken(token);
+        }
+
+        @Override
+        public FlowClient getFlowClientForProxiedEntities(String... proxiedEntity) {
+            return wrappedClient.getFlowClientForProxiedEntities(proxiedEntity);
+        }
+
+        @Override
+        public FlowClient getFlowClientForToken(String token) {
+            return wrappedClient.getFlowClientForToken(token);
+        }
+
+        @Override
+        public ProcessGroupClient getProcessGroupClient() {
+            return wrappedClient.getProcessGroupClientForToken(token);
+        }
+
+        @Override
+        public ProcessGroupClient getProcessGroupClientForProxiedEntities(String... proxiedEntity) {
+            return wrappedClient.getProcessGroupClientForProxiedEntities(proxiedEntity);
+        }
+
+        @Override
+        public ProcessGroupClient getProcessGroupClientForToken(String token) {
+            return wrappedClient.getProcessGroupClientForToken(token);
+        }
+
+        @Override
+        public VersionsClient getVersionsClient() {
+            return wrappedClient.getVersionsClientForToken(token);
+        }
+
+        @Override
+        public VersionsClient getVersionsClientForProxiedEntities(String... proxiedEntity) {
+            return wrappedClient.getVersionsClientForProxiedEntities(proxiedEntity);
+        }
+
+        @Override
+        public VersionsClient getVersionsClientForToken(String token) {
+            return wrappedClient.getVersionsClientForToken(token);
+        }
+
+        @Override
+        public TenantsClient getTenantsClient() {
+            return wrappedClient.getTenantsClientForToken(token);
+        }
+
+        @Override
+        public TenantsClient getTenantsClientForProxiedEntities(String... proxiedEntity) {
+            return wrappedClient.getTenantsClientForProxiedEntities(proxiedEntity);
+        }
+
+        @Override
+        public TenantsClient getTenantsClientForToken(String token) {
+            return wrappedClient.getTenantsClientForToken(token);
+        }
+
+        @Override
+        public PoliciesClient getPoliciesClient() {
+            return wrappedClient.getPoliciesClientForToken(token);
+        }
+
+        @Override
+        public PoliciesClient getPoliciesClientForProxiedEntities(String... proxiedEntity) {
+            return wrappedClient.getPoliciesClientForProxiedEntities(proxiedEntity);
+        }
+
+        @Override
+        public PoliciesClient getPoliciesClientForToken(String token) {
+            return wrappedClient.getPoliciesClientForToken(token);
+        }
+
+        @Override
+        public TemplatesClient getTemplatesClient() {
+            return wrappedClient.getTemplatesClientForToken(token);
+        }
+
+        @Override
+        public TemplatesClient getTemplatesClientForProxiedEntities(String... proxiedEntity) {
+            return wrappedClient.getTemplatesClientForProxiedEntities(proxiedEntity);
+        }
+
+        @Override
+        public TemplatesClient getTemplatesClientForToken(String token) {
+            return wrappedClient.getTemplatesClientForToken(token);
+        }
+
+        @Override
+        public ReportingTasksClient getReportingTasksClient() {
+            return wrappedClient.getReportingTasksClientForToken(token);
         }
 
         @Override

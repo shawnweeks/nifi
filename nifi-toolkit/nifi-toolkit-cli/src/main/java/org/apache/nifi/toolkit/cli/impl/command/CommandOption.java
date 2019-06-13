@@ -97,6 +97,7 @@ public enum CommandOption {
     TRUSTSTORE_PASSWORD("tsp", "truststorePasswd", "The password of the truststore being used", true),
     PROXIED_ENTITY("pe", "proxiedEntity", "The identity of an entity to proxy", true),
     PROTOCOL("pro", "protocol", "The security protocol to use, such as TLSv.1.2", true),
+    USE_KERBEROS("useKrb", "useKerberos", "Use Kerberos instead of SSL", true),
 
     // Miscellaneous
     FORCE("force", "force", "Indicates to force a delete operation", false),
